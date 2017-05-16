@@ -1,8 +1,8 @@
 $(document).ready(function(){
     $('#clear').click(function() {
-        $('#template').val('');
+        //$('#template').val('');
         $('#render').val('');
-        $('#values').val('');
+        //$('#values').val('');
         $('#render').html('');
     });
 
