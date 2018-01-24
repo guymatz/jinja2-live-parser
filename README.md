@@ -24,4 +24,4 @@ See filters/test_filter.py for an example
 
 ## Preview
 
-![preview](https://imgur.com/a/cZBwo)
+![preview](https://i.imgur.com/BLAokWy.png)
