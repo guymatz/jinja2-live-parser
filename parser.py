@@ -7,9 +7,11 @@ import yaml
 # For dynamic loading of filters
 import imp
 from inspect import getmembers, isfunction
-import os
+import os, sys
 
 app = Flask(__name__)
+
+sys.path.append('../ansible/lib/ansible')
 
 # Load filters in filters dir
 filter_path='filters'
@@ -25,7 +27,11 @@ for e in os.walk(filter_path, followlinks=True):
 
 for filter in filter_files:
     mod_name,file_ext = os.path.splitext(os.path.split(filter)[-1])
-    py_mod = imp.load_source(mod_name, filter)
+    try:
+        py_mod = imp.load_source(mod_name, filter)
+    except Exception as e:
+        print("COuldn't import %s: %s" % (filter, e))
+        next
     for name, function in getmembers(py_mod):
             if isfunction(function) and not name.startswith('_'):
                 # Saving filter info to put it in HTML at some point
