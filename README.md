@@ -8,7 +8,8 @@ All you need is Python and preferably [pip](https://pypi.python.org/pypi/pip).
 
     $ git clone git@github.com:guymatz/jinja2-live-parser.git
 
-    Then install virtualenv with your native package manager or pip
+    Then install virtualenv with your native package manager or pip and install requirements.txt
+    OR just run setup.sh
     Finally, 
     $ ./run.sh
 
@@ -23,4 +24,4 @@ See filters/test_filter.py for an example
 
 ## Preview
 
-![preview](http://i.imgur.com/9tSiilb.png)
+![preview](https://imgur.com/a/cZBwo)
