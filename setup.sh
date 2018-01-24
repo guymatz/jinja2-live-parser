@@ -1,9 +1,10 @@
 #!/bin/bash
 
-#pip install virtualenv
-#virtualenv venv
-#source ./venv/bin/activate
+V_DIR="venv"
+which virtualenv 2&>1 > /dev/null || echo "Please install virtualenv" && exit 1
+[ -d $V_DIR ] || virtualenv -p python $V_DIR
+source ./$V_DIR/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
-#ln -s ../venv/lib/python2.7/site-packages/ansible/runner/filter_plugins filters/ansible
-find /usr/local/lib/python2.7/dist-packages
-ln -s /usr/local/lib/python2.7/dist-packages/ansible/runner/filter_plugins filters/ansible
+SITE_DIR=$(python -c "import sys; print([ x for x in sys.path if x.endswith('site-packages') ][0])")
+ln -s $SITE_DIR/ansible/plugins/filter filters/ansible
