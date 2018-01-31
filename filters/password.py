@@ -25,7 +25,9 @@ def _debug(msg):
 
 def create_encrypted_password(password, hashtype='sha512', salt=None, saltsize=None, ident=None, debug=False, **kwargs):
 
-    """ Returns an encrypted string
+    """ Returns an encrypted string:
+    'password'|create_encrypted_password(hashtype='oracle10', user='admin')
+    'password'|create_encrypted_password(hashtype='bcrypt')
   
     :param password: String to encrypt (Required)
     :param hashtype: Encryption Algorithm (default: sha512)
