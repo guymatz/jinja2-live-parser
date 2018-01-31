@@ -38,6 +38,24 @@ for filter in filter_files:
                 added_filters[name] = function.__doc__
                 # add filter to jinja
                 app.jinja_env.filters[name] = function
+    try:
+        filter_module = imp.load_source('%s.FilterModule' % mod_name, filter)
+        filters = filter_module.FilterModule().filters()
+        for fname, func in filters.iteritems():
+            if not added_filters.get(fname, None):
+                try:
+                    # print("Adding %s from FilterModule of %s" % (fname, mod_name))
+                    # Saving filter info to put it in HTML at some point
+                    added_filters[fname] = func.__doc__
+                    # add filter to jinja
+                    app.jinja_env.filters[fname] = func
+                except Exception as e:
+                    print("Couldn't import %s from %s.FilterModule: %s" % (fname, mod_name, e))
+            else:
+                print("Function %s already exists.  New doc: %s" % (fname, func.__doc__))
+    except Exception as e:
+        print("Couldn't import FilterModule from %s: %s" % (mod_name, e))
+
 
 # These are the added filters.  must add these name + doc strings to the html
 # Also do this for built-in jinja filters
