@@ -28,12 +28,12 @@ for e in os.walk(filter_path, followlinks=True):
       app.logger.warning("Adding %s" % os.path.join(e[0], f))
       filter_files.append(os.path.join(e[0], f))
 
-for filter in filter_files:
-    mod_name,file_ext = os.path.splitext(os.path.split(filter)[-1])
+for jfilter in filter_files:
+    mod_name, file_ext = os.path.splitext(os.path.split(jfilter)[-1])
     try:
-        py_mod = imp.load_source(mod_name, filter)
+        py_mod = imp.load_source(mod_name, jfilter)
     except Exception as e:
-        app.logger.warning("Couldn't import %s: %s" % (filter, e))
+        app.logger.warning("Couldn't import %s: %s" % (jfilter, e))
         next
     for name, function in getmembers(py_mod):
             if isfunction(function) and not name.startswith('_'):
@@ -42,7 +42,7 @@ for filter in filter_files:
                 # add filter to jinja
                 app.jinja_env.filters[name] = function
     try:
-        filter_module = imp.load_source('%s.FilterModule' % mod_name, filter)
+        filter_module = imp.load_source('%s.FilterModule' % mod_name, jfilter)
         filters = filter_module.FilterModule().filters()
         for fname, func in filters.iteritems():
             if not added_filters.get(fname, None):
@@ -81,8 +81,8 @@ def convert():
     tpl = app.jinja_env.from_string(request.form['template'])
     values = {}
 
-    for field in request.form.keys():
-        app.logger.debug("%s: %s\n" % (field, request.form[field]))
+#    for field in request.form.keys():
+#        app.logger.debug("%s: %s\n" % (field, request.form[field]))
 
     if int(request.form['dummyvalues']):
         # List variables (introspection)
@@ -92,23 +92,31 @@ def convert():
         for v in vars_to_fill:
             values[v] = choice(dummy_values)
     else:
-#        remote_server = request.form['remote_server']
-#        app.logger.warning("Remote Server: %s" % remote_server)
-#        if int(request.form['use_remote_data']) and remote_server != '':
-#            try:
-#                values['pillar'] = grab_data(remote_server, 'pillar')
-#                values['grains'] = grab_data(remote_server, 'grains')
-#            except ValueError as e:
-#                values['Value_ERROR'] = e
-#            except ValueError as e:
-#                app.logger.warning(e)
-#                values['ERROR'] = e
-
+        #import pdb; pdb.set_trace()
         if int(request.form['use_yaml']):
-            values = yaml.load(request.form['values'])
+            if yaml.load(request.form['values']):
+                values = yaml.load(request.form['values'])
         else:
-            values = json.loads(request.form['values'])
+            if json.loads(request.form['values']):
+                values = json.loads(request.form['values'])
 
+        app.logger.warning("Values (%s): %s" % (type(values), str(values)))
+        remote_server = request.form['remote_server']
+        app.logger.warning("Remote Server: %s" % remote_server)
+        if int(request.form['use_remote_data']) and remote_server != '':
+            try:
+                values['pillar'] = grab_data(remote_server, 'pillar')
+                app.logger.warning("Pillar: %s" % values['pillar'])
+                values['grains'] = grab_data(remote_server, 'grains')
+                app.logger.warning("Grains: %s" % values['grains'])
+            except ValueError as e:
+                values['Value_ERROR'] = e
+            except ValueError as e:
+                app.logger.warning(e)
+                values['ERROR'] = e
+
+    app.logger.warning(str(values))
+    app.logger.warning(yaml.dump(values), sys.stdout)
     rendered_tpl = tpl.render(values)
 
     if int(request.form['showwhitespaces']):
@@ -127,7 +135,9 @@ def grab_data(remote_host, salt_data):
     if (len(errors) > 0):
         raise ValueError('salt-call error: %s' % errors)
     else:
-        return yaml.load(stdout.read())
+        out = stdout.read()
+        yaml_out = yaml.load(out)
+        return yaml_out['local']
 
 
 if __name__ == "__main__":
