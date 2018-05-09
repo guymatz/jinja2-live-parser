@@ -1,5 +1,7 @@
 #!/bin/bash
 
+
+
 V_DIR="venv"
 which virtualenv 2>&1 > /dev/null
 if [ $? -ne 0 ]; then

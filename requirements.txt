@@ -2,7 +2,9 @@ Flask==0.10.1
 #MarkupSafe==0.18
 #Werkzeug==0.9.6
 #itsdangerous==0.24
-ansible
+#ansible
+salt
 #Jinja2==2.7.1
 ipython
 passlib
+paramiko

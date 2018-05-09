@@ -7,7 +7,7 @@ $(document).ready(function(){
     });
 
     // $('#use_yaml').click(function() {
-    $('input[type=checkbox]').change(function() {
+    $('input[name=use_yaml]').change(function() {
         if($(this).is(':checked')) {
             $("#data h1").html("Values (YAML)");
         }
@@ -20,6 +20,7 @@ $(document).ready(function(){
         var is_checked_showwhitespaces = $('input[name="showwhitespaces"]').is(':checked') ? 1:0;
         var is_checked_dummyvalues = $('input[name="dummyvalues"]').is(':checked') ? 1:0;
         var is_checked_use_yaml = $('input[name="use_yaml"]').is(':checked') ? 1:0;
+        var is_checked_use_remote_data = $('input[name="use_remote_data"]').is(':checked') ? 1:0;
 
 
         // Push the input to the Jinja2 api (Python)
@@ -28,7 +29,9 @@ $(document).ready(function(){
             values: $('#values').val(),
             showwhitespaces: is_checked_showwhitespaces,
             dummyvalues: is_checked_dummyvalues,
-            use_yaml: is_checked_use_yaml
+            use_yaml: is_checked_use_yaml,
+            use_remote_data: is_checked_use_remote_data,
+            remote_server: $('#remote_server').val()
         }).done(function(response) {
             // Grey out the white spaces chars if any
             response = response.replace(/•/g, '<span class="whitespace">•</span>');

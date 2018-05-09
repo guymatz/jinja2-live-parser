@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from flask import Flask, render_template, request
+import logging
 from jinja2 import Template, Environment, meta
 from random import choice
 import json
@@ -7,7 +8,9 @@ import yaml
 # For dynamic loading of filters
 import imp
 from inspect import getmembers, isfunction
-import os, sys
+import os
+import sys
+from paramiko import SSHClient
 
 app = Flask(__name__)
 
@@ -22,7 +25,7 @@ added_filters = {}
 for e in os.walk(filter_path, followlinks=True):
   for f in e[2]:
     if f.endswith('py'):
-      print("Adding %s" % os.path.join(e[0], f))
+      app.logger.warning("Adding %s" % os.path.join(e[0], f))
       filter_files.append(os.path.join(e[0], f))
 
 for filter in filter_files:
@@ -30,7 +33,7 @@ for filter in filter_files:
     try:
         py_mod = imp.load_source(mod_name, filter)
     except Exception as e:
-        print("COuldn't import %s: %s" % (filter, e))
+        app.logger.warning("Couldn't import %s: %s" % (filter, e))
         next
     for name, function in getmembers(py_mod):
             if isfunction(function) and not name.startswith('_'):
@@ -44,23 +47,23 @@ for filter in filter_files:
         for fname, func in filters.iteritems():
             if not added_filters.get(fname, None):
                 try:
-                    # print("Adding %s from FilterModule of %s" % (fname, mod_name))
+                    # app.logger.warning("Adding %s from FilterModule of %s" % (fname, mod_name))
                     # Saving filter info to put it in HTML at some point
                     added_filters[fname] = func.__doc__
                     # add filter to jinja
                     app.jinja_env.filters[fname] = func
                 except Exception as e:
-                    print("Couldn't import %s from %s.FilterModule: %s" % (fname, mod_name, e))
+                    app.logger.warning("Couldn't import %s from %s.FilterModule: %s" % (fname, mod_name, e))
             else:
-                print("Function %s already exists.  New doc: %s" % (fname, func.__doc__))
+                app.logger.warning("Function %s already exists.  New doc: %s" % (fname, func.__doc__))
     except Exception as e:
-        print("Couldn't import FilterModule from %s: %s" % (mod_name, e))
+        app.logger.warning("Couldn't import FilterModule from %s: %s" % (mod_name, e))
 
 
 # These are the added filters.  must add these name + doc strings to the html
 # Also do this for built-in jinja filters
 #for f in sorted(added_filters):
-#    print("%s: %s" % (f, added_filters[f]))
+#    app.logger.warning("%s: %s" % (f, added_filters[f]))
 
 @app.route("/")
 def hello():
@@ -78,6 +81,9 @@ def convert():
     tpl = app.jinja_env.from_string(request.form['template'])
     values = {}
 
+    for field in request.form.keys():
+        app.logger.debug("%s: %s\n" % (field, request.form[field]))
+
     if int(request.form['dummyvalues']):
         # List variables (introspection)
         env = Environment()
@@ -86,6 +92,18 @@ def convert():
         for v in vars_to_fill:
             values[v] = choice(dummy_values)
     else:
+#        remote_server = request.form['remote_server']
+#        app.logger.warning("Remote Server: %s" % remote_server)
+#        if int(request.form['use_remote_data']) and remote_server != '':
+#            try:
+#                values['pillar'] = grab_data(remote_server, 'pillar')
+#                values['grains'] = grab_data(remote_server, 'grains')
+#            except ValueError as e:
+#                values['Value_ERROR'] = e
+#            except ValueError as e:
+#                app.logger.warning(e)
+#                values['ERROR'] = e
+
         if int(request.form['use_yaml']):
             values = yaml.load(request.form['values'])
         else:
@@ -98,6 +116,19 @@ def convert():
         rendered_tpl = rendered_tpl.replace(' ', u'•')
 
     return rendered_tpl.replace('\n', '<br />')
+
+
+def grab_data(remote_host, salt_data):
+    client = SSHClient()
+    client.load_system_host_keys()
+    client.connect(remote_host, username=os.environ['USER'])
+    stdin, stdout, stderr = client.exec_command('sudo salt-call --out=yaml %s.items' % salt_data, get_pty=True)
+    errors = stderr.read()
+    if (len(errors) > 0):
+        raise ValueError('salt-call error: %s' % errors)
+    else:
+        return yaml.load(stdout.read())
+
 
 if __name__ == "__main__":
     app.debug = True
