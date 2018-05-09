@@ -3,3 +3,5 @@ venv
 **/*pyc
 
 filters/ansible
+
+.idea
