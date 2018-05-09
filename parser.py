@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, request
-import logging
+from flask import Flask, render_template, request, escape
 from jinja2 import Template, Environment, meta
 from random import choice
 import json
@@ -110,10 +109,15 @@ def convert():
                 values['grains'] = grab_data(remote_server, 'grains')
                 app.logger.warning("Grains: %s" % values['grains'])
             except ValueError as e:
-                values['Value_ERROR'] = e
-            except ValueError as e:
-                app.logger.warning(e)
-                values['ERROR'] = e
+                values['ERROR'] = "Value Error: %s" % e
+                app.logger.warning(values['ERROR'])
+            except Exception as e:
+                values['ERROR'] = "Regular Error: %s" % str(e)
+                app.logger.warning(values['ERROR'])
+
+            if values['ERROR']:
+                app.logger.warning(values['ERROR'])
+                return escape(values['ERROR'])
 
     app.logger.warning(str(values))
     app.logger.warning(yaml.dump(values), sys.stdout)
@@ -129,10 +133,16 @@ def convert():
 def grab_data(remote_host, salt_data):
     client = SSHClient()
     client.load_system_host_keys()
-    client.connect(remote_host, username=os.environ['USER'])
-    stdin, stdout, stderr = client.exec_command('sudo salt-call --out=yaml %s.items' % salt_data, get_pty=True)
-    errors = stderr.read()
-    if (len(errors) > 0):
+    client.connect(remote_host, username=os.environ['USER'], timeout=5)
+    cmd = 'sudo salt-call --out=yaml %s.items' % salt_data
+    stdin, stdout, stderr, errors = (None, None, None, None)
+    try:
+        stdin, stdout, stderr = client.exec_command(cmd, get_pty=True, timeout=5)
+        errors = stderr.read()
+    except Exception as e:
+        #import pdb; pdb.set_trace()
+        raise Exception(str(e.__class__))
+    if len(errors) > 0:
         raise ValueError('salt-call error: %s' % errors)
     else:
         out = stdout.read()
