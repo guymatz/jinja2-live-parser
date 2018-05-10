@@ -1,0 +1,26 @@
+{% raw %}
+manage_cacert:
+  file.managed:
+    - name: /etc/cacerts/cacert.pem
+    - user: root
+    - group: root
+    - file_mode: 644
+    - contents_pillar: providers:ldapcert
+    - makedirs: True
+    - dir_mode: 755
+{% if grains['os_family'] =='RedHat' %}
+    - require:
+      - pkg: auth_packages
+
+include:
+  - .redhat.rh{{ grains['osmajorrelease'] }}
+
+{% elif 'Ubuntu' in grains['os'] %}
+include:
+  - .ubuntu
+
+{% elif 'Suse' in grains['os_family'] %}
+include:
+  - .suse
+{% endif %}
+{% endraw %}

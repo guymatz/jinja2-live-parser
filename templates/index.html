@@ -15,7 +15,7 @@
         <div class="row">
             <div class="col-md-5">
                 <h1>Template</h1>
-                <textarea id="template">{% include 'example_template.html' %}</textarea>
+                <textarea id="template">{% include 'salt_example_template.html' %}</textarea>
             </div>
             <div class="col-md-5">
                 <h1>Render</h1>
@@ -26,9 +26,11 @@
                 <div id="settings">
                     <label><input type="checkbox" name="showwhitespaces" checked="checked" /> Show whitespaces</label><br/>
                     <label><input type="checkbox" name="dummyvalues" /> Use dummy values</label>
-                    <label><input type="checkbox" name="use_yaml" /> Data is YAML</label>
+                    <label><input type="checkbox" name="use_yaml" checked="checked" /> Data is YAML</label>
                     <label><input type="checkbox" name="use_remote_data" /> Keep grabbing data from remote server</label>
                     <label><input type="textbox" id="remote_server" /> Remote Server</label>
+                    <label><input type="textbox" id="remote_username" /> Remote Username</label>
+                    <label><input type="password" id="remote_password" /> Remote Password</label>
                     <input type="button" class="btn btn-success" id="convert" value="Convert" />
                     <input type="button" class="btn btn-danger" id="clear" value="Clear" />
                 </div>
@@ -38,7 +40,7 @@
         <div class="row">
             <div id="data" class="col-md-5">
                 <h1>Values (JSON)</h1>
-                <textarea id="values">{% include 'example_values.html' %}</textarea>
+                <textarea id="values">{% include 'salt_example_values.html' %}</textarea>
             </div>
 
             <div class="col-md-5">
