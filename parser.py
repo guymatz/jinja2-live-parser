@@ -9,7 +9,7 @@ import imp
 from inspect import getmembers, isfunction
 import os
 import sys
-from paramiko import SSHClient
+from sshclient import SshClient
 
 app = Flask(__name__)
 
@@ -101,12 +101,14 @@ def convert():
 
         app.logger.warning("Values (%s): %s" % (type(values), str(values)))
         remote_server = request.form['remote_server']
+        remote_username = request.form['remote_username']
+        remote_password = request.form['remote_password']
         app.logger.warning("Remote Server: %s" % remote_server)
         if int(request.form['use_remote_data']) and remote_server != '':
             try:
-                values['pillar'] = grab_data(remote_server, 'pillar')
+                values['pillar'] = grab_data(remote_server, remote_username, remote_password, 'pillar')
                 app.logger.warning("Pillar: %s" % values['pillar'])
-                values['grains'] = grab_data(remote_server, 'grains')
+                values['grains'] = grab_data(remote_server, remote_username, remote_password, 'grains')
                 app.logger.warning("Grains: %s" % values['grains'])
             except ValueError as e:
                 values['ERROR'] = "Value Error: %s" % e
@@ -115,13 +117,17 @@ def convert():
                 values['ERROR'] = "Regular Error: %s" % str(e)
                 app.logger.warning(values['ERROR'])
 
-            if values['ERROR']:
+            if values.get('ERROR'):
                 app.logger.warning(values['ERROR'])
                 return escape(values['ERROR'])
 
     app.logger.warning(str(values))
     app.logger.warning(yaml.dump(values), sys.stdout)
-    rendered_tpl = tpl.render(values)
+    try:
+        rendered_tpl = tpl.render(values)
+    except Exception as e:
+        app.logger.warning("Ooops: %s" % e)
+        return str(e)
 
     if int(request.form['showwhitespaces']):
         # Replace whitespaces with a visible character (will be grayed with javascript)
@@ -130,22 +136,24 @@ def convert():
     return rendered_tpl.replace('\n', '<br />')
 
 
-def grab_data(remote_host, salt_data):
-    client = SSHClient()
-    client.load_system_host_keys()
-    client.connect(remote_host, username=os.environ['USER'], timeout=5)
-    cmd = 'sudo salt-call --out=yaml %s.items' % salt_data
-    stdin, stdout, stderr, errors = (None, None, None, None)
+def grab_data(remote_host, username, password, salt_data):
+    client = SshClient(host=remote_host, username=username, password=password)
+    cmd = 'salt-call --out=yaml %s.items' % salt_data
+    ret = None
+    out, errors, retval = None, None, None
     try:
-        stdin, stdout, stderr = client.exec_command(cmd, get_pty=True, timeout=5)
-        errors = stderr.read()
-    except Exception as e:
+        ret = client.execute(cmd, sudo=True)
+        errors = "".join(ret['err'])
+        out = "".join(ret["out"])
+        retval = ret["retval"]
         #import pdb; pdb.set_trace()
-        raise Exception(str(e.__class__))
+    except Exception as e:
+        raise Exception(str(ret))
+    finally:
+        client.close()
     if len(errors) > 0:
         raise ValueError('salt-call error: %s' % errors)
     else:
-        out = stdout.read()
         yaml_out = yaml.load(out)
         return yaml_out['local']
 
