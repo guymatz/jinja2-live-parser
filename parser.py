@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, escape
 from jinja2 import Template, Environment, meta
+import logging
 from random import choice
 import json
 import yaml
@@ -13,26 +14,31 @@ from sshclient import SshClient
 
 app = Flask(__name__)
 
-sys.path.append('../ansible/lib/ansible')
+#sys.path.append('../ansible/lib/ansible')
 
 # Load filters in filters dir
 filter_path='filters'
-filter_files =  [ ]
+filter_files = []
 added_filters = {}
 
 # Find py files and turn then into filterpath/blah/filter.py
 for e in os.walk(filter_path, followlinks=True):
-  for f in e[2]:
-    if f.endswith('py'):
-      app.logger.warning("Adding %s" % os.path.join(e[0], f))
-      filter_files.append(os.path.join(e[0], f))
+    for f in e[2]:
+        if f.endswith('py'):
+            app.logger.debug("Adding debug %s" % os.path.join(e[0], f))
+            app.logger.info("Adding info %s" % os.path.join(e[0], f))
+            app.logger.warning("Adding warning %s" % os.path.join(e[0], f))
+            app.logger.error("Adding error %s" % os.path.join(e[0], f))
+            print("Adding %s" % os.path.join(e[0], f))
+            filter_files.append(os.path.join(e[0], f))
 
 for jfilter in filter_files:
     mod_name, file_ext = os.path.splitext(os.path.split(jfilter)[-1])
     try:
         py_mod = imp.load_source(mod_name, jfilter)
     except Exception as e:
-        app.logger.warning("Couldn't import %s: %s" % (jfilter, e))
+        app.logger.debug("Couldn't import %s: %s" % (jfilter, e))
+        print("Couldn't import %s: %s" % (jfilter, e))
         next
     for name, function in getmembers(py_mod):
             if isfunction(function) and not name.startswith('_'):
@@ -61,8 +67,11 @@ for jfilter in filter_files:
 
 # These are the added filters.  must add these name + doc strings to the html
 # Also do this for built-in jinja filters
-#for f in sorted(added_filters):
-#    app.logger.warning("%s: %s" % (f, added_filters[f]))
+for f in sorted(added_filters):
+    app.logger.warning("%s: %s" % (f, added_filters[f]))
+    doc_string = str(added_filters.get(f, 'No Description'))
+    doc_string = doc_string.split('\n')[0]
+    print("%s: %s" % (f, doc_string))
 
 @app.route("/")
 def hello():
