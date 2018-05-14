@@ -48,7 +48,6 @@ for e in os.walk(filter_path, followlinks=True):
             app.logger.error("Adding error %s" % os.path.join(e[0], f))
             print("Checking for filters  %s" % os.path.join(e[0], f))
             filter_files.append(os.path.join(e[0], f))
-filter_files = [ 'filters/salt/hashutils.py' ]
 print("All filters  %s" % sorted(filter_files))
 
 for jfilter in filter_files:
