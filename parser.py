@@ -4,7 +4,7 @@ from jinja2 import Template, Environment, meta
 import logging
 from random import choice
 import json
-import yaml
+import yaml as yamlloader
 # For dynamic loading of filters
 import imp
 import ast
@@ -16,6 +16,7 @@ from sshclient import SshClient
 app = Flask(__name__)
 
 #sys.path.append('../ansible/lib/ansible')
+sys.path.append('filters/salt')
 
 # Load filters in filters dir
 filter_path='filters'
@@ -29,7 +30,10 @@ def find_decorated(target, decorator_method):
         res[node.name] = [ast.dump(e) for e in node.decorator_list]
     V = ast.NodeVisitor()
     V.visit_FunctionDef = visit_function_def
-    V.visit(compile(inspect.getsource(target), '?', 'exec', ast.PyCF_ONLY_AST))
+    try:
+        V.visit(compile(inspect.getsource(target), '?', 'exec', ast.PyCF_ONLY_AST))
+    except Exception as e:
+        print("What Happened to %s?: %s" % (target, e))
     # returning methods that are decorated, e.g.
     # base64_b64encode ["Call(func=Name(id='jinja_filter', ctx=Load()), args=[Str(s='base64_encode')], keywords=[])"]
     return [ f for f in res.keys() if len(res[f]) > 0 and decorator_method in res[f][0] ]
@@ -39,9 +43,6 @@ def find_decorated(target, decorator_method):
 for e in os.walk(filter_path, followlinks=True):
     for f in e[2]:
         if f.endswith('py'):
-            if 'yaml' in f:
-                print("Skipping * %s" % f)
-                next
             app.logger.debug("Adding debug %s" % os.path.join(e[0], f))
             app.logger.info("Adding info %s" % os.path.join(e[0], f))
             app.logger.warning("Adding warning %s" % os.path.join(e[0], f))
@@ -50,52 +51,50 @@ for e in os.walk(filter_path, followlinks=True):
             filter_files.append(os.path.join(e[0], f))
 print("All filters  %s" % sorted(filter_files))
 
+# Now look in the files for jinja filters
+#import ipdb; ipdb.set_trace()
 for jfilter in filter_files:
-    if 'yaml' in jfilter:
-        print("Skipping * %s" % name)
-        next
     mod_name, file_ext = os.path.splitext(os.path.split(jfilter)[-1])
     py_mod = None
+    # Load the module into py_mod
     try:
         py_mod = imp.load_source(mod_name, jfilter)
+        print("Imported %s from %s" % (mod_name, jfilter))
     except Exception as e:
-        app.logger.debug("Couldn't import %s: %s" % (jfilter, e))
         print("Couldn't import %s: %s" % (jfilter, e))
         next
+    # . . .  and find the methods in the module that are decorated with @jinja_filter
     py_mod_decorated = find_decorated(py_mod, 'jinja_filter')
     for name, func in inspect.getmembers(py_mod):
-        if 'yaml' in name:
-            print("Skipping ** %s" % name)
-            next
-        if inspect.isfunction(func) and not name.startswith('_') and name in py_mod_decorated:
+        # Add the decorated methods to available jinja filters
+        if inspect.isfunction(func) and name in py_mod_decorated:
             # Saving filter info to put it in HTML at some point
             added_filters[name] = func.__doc__
             # add filter to jinja
             app.jinja_env.filters[name] = func
             print("Added filter %s from %s" % (name, jfilter))
-    try:
-        filter_module = imp.load_source('%s.FilterModule' % mod_name, jfilter)
-        filters = filter_module.FilterModule().filters()
-        for fname, ffunc in filters.iteritems():
-            if 'yaml' in fname:
-                print("Skipping *** %s" % name)
-                next
-            if not added_filters.get(fname, None):
-                try:
-                    # app.logger.warning("Adding %s from FilterModule of %s" % (fname, mod_name))
-                    # Saving filter info to put it in HTML at some point
-                    added_filters[fname] = ffunc.__doc__
-                    # add filter to jinja
-                    app.jinja_env.filters[fname] = ffunc
-                except Exception as e:
-                    app.logger.warning("Couldn't import %s from %s.FilterModule: %s" % (fname, mod_name, e))
-            else:
-                app.logger.warning("Function %s already exists.  New doc: %s" % (fname, ffunc.__doc__))
-    except Exception as e:
-        app.logger.warning("Couldn't import FilterModule from %s: %s" % (mod_name, e))
+## This is ansible-specific and can be ignored for now
+#    try:
+#        import ipdb; ipdb.set_trace()
+#        filter_module = imp.load_source('%s.FilterModule' % mod_name, jfilter)
+#        filters = filter_module.FilterModule().filters()
+#        for fname, ffunc in filters.iteritems():
+#            if not added_filters.get(fname, None):
+#                try:
+#                    # app.logger.warning("Adding %s from FilterModule of %s" % (fname, mod_name))
+#                    # Saving filter info to put it in HTML at some point
+#                    added_filters[fname] = ffunc.__doc__
+#                    # add filter to jinja
+#                    app.jinja_env.filters[fname] = ffunc
+#                except Exception as e:
+#                    app.logger.warning("Couldn't import %s from %s.FilterModule: %s" % (fname, mod_name, e))
+#            else:
+#                app.logger.warning("Function %s already exists.  New doc: %s" % (fname, ffunc.__doc__))
+#    except Exception as e:
+#        app.logger.warning("Couldn't import FilterModule from %s: %s" % (mod_name, e))
 
 
-#import pdb; pdb.set_trace()
+#import ipdb; ipdb.set_trace()
 # These are the added filters.  must add these name + doc strings to the html
 # Also do this for built-in jinja filters
 for f in sorted(added_filters):
@@ -137,8 +136,8 @@ def convert():
                 pillar_values = json.loads(values_str)
             else:
                 app.logger.warning("About to try to parse yaml: %s" % dir())
-                #import pdb; pdb.set_trace()
-                pillar_values = yaml.load(values_str)
+                #import ipdb; ipdb.set_trace()
+                pillar_values = yamlloader.load(values_str)
         except Exception as e:
             app.logger.warning("Could not parse additional data: %s" % e)
 
@@ -149,7 +148,7 @@ def convert():
         app.logger.warning("Remote Server: %s" % remote_server)
         if int(request.form['use_remote_data']) and remote_server != '':
             try:
-                import pdb; pdb.set_trace()
+                import ipdb; ipdb.set_trace()
                 values['pillar'] = grab_data(remote_server, remote_username, remote_password, 'pillar')
                 app.logger.warning("Pillar: %s" % values['pillar'])
                 values['grains'] = grab_data(remote_server, remote_username, remote_password, 'grains')
@@ -200,9 +199,9 @@ def grab_data(remote_host, username, password, salt_data):
     if len(errors) > 0:
         raise ValueError('salt-call error: %s' % errors)
     else:
-        import yaml
-        yaml_out = yaml.load(out)
-        return yaml_out['local']
+        yaml_out = yamlloader.load(out)
+        return yaml_out
+        #return yaml_out['local']
 
 
 
