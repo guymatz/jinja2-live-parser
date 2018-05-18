@@ -4,7 +4,7 @@ from jinja2 import Template, Environment, meta
 import logging
 from random import choice
 import json
-import yaml as yamlloader
+import yaml
 # For dynamic loading of filters
 import imp
 import ast
@@ -16,93 +16,10 @@ from sshclient import SshClient
 app = Flask(__name__)
 
 #sys.path.append('../ansible/lib/ansible')
-sys.path.append('filters/salt')
+#sys.path.append('filters/salt')
 
 # Load filters in filters dir
-filter_path='filters'
-filter_files = []
-added_filters = {}
-
-
-def find_decorated(target, decorator_method):
-    res = {}
-    def visit_function_def(node):
-        res[node.name] = [ast.dump(e) for e in node.decorator_list]
-    V = ast.NodeVisitor()
-    V.visit_FunctionDef = visit_function_def
-    try:
-        V.visit(compile(inspect.getsource(target), '?', 'exec', ast.PyCF_ONLY_AST))
-    except Exception as e:
-        print("What Happened to %s?: %s" % (target, e))
-    # returning methods that are decorated, e.g.
-    # base64_b64encode ["Call(func=Name(id='jinja_filter', ctx=Load()), args=[Str(s='base64_encode')], keywords=[])"]
-    return [ f for f in res.keys() if len(res[f]) > 0 and decorator_method in res[f][0] ]
-
-
-# Find py files and turn then into filterpath/blah/filter.py
-for e in os.walk(filter_path, followlinks=True):
-    for f in e[2]:
-        if f.endswith('py'):
-            app.logger.debug("Adding debug %s" % os.path.join(e[0], f))
-            app.logger.info("Adding info %s" % os.path.join(e[0], f))
-            app.logger.warning("Adding warning %s" % os.path.join(e[0], f))
-            app.logger.error("Adding error %s" % os.path.join(e[0], f))
-            print("Checking for filters  %s" % os.path.join(e[0], f))
-            filter_files.append(os.path.join(e[0], f))
-print("All filters  %s" % sorted(filter_files))
-
-# Now look in the files for jinja filters
-#import ipdb; ipdb.set_trace()
-for jfilter in filter_files:
-    mod_name, file_ext = os.path.splitext(os.path.split(jfilter)[-1])
-    py_mod = None
-    # Load the module into py_mod
-    try:
-        py_mod = imp.load_source(mod_name, jfilter)
-        print("Imported %s from %s" % (mod_name, jfilter))
-    except Exception as e:
-        print("Couldn't import %s: %s" % (jfilter, e))
-        next
-    # . . .  and find the methods in the module that are decorated with @jinja_filter
-    py_mod_decorated = find_decorated(py_mod, 'jinja_filter')
-    for name, func in inspect.getmembers(py_mod):
-        # Add the decorated methods to available jinja filters
-        if inspect.isfunction(func) and name in py_mod_decorated:
-            # Saving filter info to put it in HTML at some point
-            added_filters[name] = func.__doc__
-            # add filter to jinja
-            app.jinja_env.filters[name] = func
-            print("Added filter %s from %s" % (name, jfilter))
-## This is ansible-specific and can be ignored for now
-#    try:
-#        import ipdb; ipdb.set_trace()
-#        filter_module = imp.load_source('%s.FilterModule' % mod_name, jfilter)
-#        filters = filter_module.FilterModule().filters()
-#        for fname, ffunc in filters.iteritems():
-#            if not added_filters.get(fname, None):
-#                try:
-#                    # app.logger.warning("Adding %s from FilterModule of %s" % (fname, mod_name))
-#                    # Saving filter info to put it in HTML at some point
-#                    added_filters[fname] = ffunc.__doc__
-#                    # add filter to jinja
-#                    app.jinja_env.filters[fname] = ffunc
-#                except Exception as e:
-#                    app.logger.warning("Couldn't import %s from %s.FilterModule: %s" % (fname, mod_name, e))
-#            else:
-#                app.logger.warning("Function %s already exists.  New doc: %s" % (fname, ffunc.__doc__))
-#    except Exception as e:
-#        app.logger.warning("Couldn't import FilterModule from %s: %s" % (mod_name, e))
-
-
-#import ipdb; ipdb.set_trace()
-# These are the added filters.  must add these name + doc strings to the html
-# Also do this for built-in jinja filters
-for f in sorted(added_filters):
-    app.logger.warning("%s: %s" % (f, added_filters[f]))
-    doc_string = str(added_filters.get(f, 'No Description'))
-    doc_string = doc_string.split('\n')[0]
-    print("%s: %s" % (f, doc_string))
-
+jinja_filter_path='filters'
 
 @app.route("/")
 def hello():
@@ -137,7 +54,7 @@ def convert():
             else:
                 app.logger.warning("About to try to parse yaml: %s" % dir())
                 #import ipdb; ipdb.set_trace()
-                pillar_values = yamlloader.load(values_str)
+                pillar_values = yaml.load(values_str)
         except Exception as e:
             app.logger.warning("Could not parse additional data: %s" % e)
 
@@ -148,7 +65,7 @@ def convert():
         app.logger.warning("Remote Server: %s" % remote_server)
         if int(request.form['use_remote_data']) and remote_server != '':
             try:
-                import ipdb; ipdb.set_trace()
+                #import ipdb; ipdb.set_trace()
                 values['pillar'] = grab_data(remote_server, remote_username, remote_password, 'pillar')
                 app.logger.warning("Pillar: %s" % values['pillar'])
                 values['grains'] = grab_data(remote_server, remote_username, remote_password, 'grains')
@@ -199,12 +116,77 @@ def grab_data(remote_host, username, password, salt_data):
     if len(errors) > 0:
         raise ValueError('salt-call error: %s' % errors)
     else:
-        yaml_out = yamlloader.load(out)
-        return yaml_out
-        #return yaml_out['local']
+        yaml_out = yaml.load(out)
+        # Some versions of salt have grains/pillars in a "local" key . . .
+        if yaml_out.get('local'):
+            return yaml_out['local']
+        else:
+            return yaml_out
 
+
+def add_jinja_filters(filter_path='.'):
+
+    filter_files = []
+    added_filters = {}
+
+    # Find py files and turn then into filterpath/blah/filter.py
+    for e in os.walk(filter_path, followlinks=True):
+        for f in e[2]:
+            if f.endswith('py'):
+                app.logger.debug("Adding debug %s" % os.path.join(e[0], f))
+                app.logger.info("Adding info %s" % os.path.join(e[0], f))
+                app.logger.warning("Adding warning %s" % os.path.join(e[0], f))
+                app.logger.error("Adding error %s" % os.path.join(e[0], f))
+                print("Checking for filters  %s" % os.path.join(e[0], f))
+                filter_files.append(os.path.join(e[0], f))
+    app.logger.debug("All filters  %s" % sorted(filter_files))
+
+    # Now look in the files for jinja filters
+    #import ipdb; ipdb.set_trace()
+    for jfilter in filter_files:
+        print("Checking out file %s" % jfilter)
+        with open(jfilter) as file:
+            text = file.read()
+        # see https://stackoverflow.com/questions/48759838/how-to-create-a-function-object-from-an-ast-functiondef-node
+        tree = ast.parse(text)
+        code = compile(tree, filename="poopy", mode="exec")
+        code_namespace = {}
+        try:
+            # exec the code into it's own namespace where we can access it without it pollutins global
+            exec(code, code_namespace)
+        except KeyError as ke:
+            print(f"Error exec'ing code: {code} - {ke}")
+            app.logger.debug(f"Error exec'ing code: {code} - {ke}")
+        except ModuleNotFoundError as mne:
+            print(f"Error exec'ing code: {code} - {mne}")
+            app.logger.debug(f"Error exec'ing code: {code} - {mne}")
+        except NameError as ne:
+            print(f"Error exec'ing code: {code} - {ne}")
+            app.logger.debug(f"Error exec'ing code: {code} - {ne}")
+        for thing in tree.body:
+            # Here we check if the thing in the filter is a Function, then if it's a jinja_filter
+            print("Checking out thing %s" % thing)
+            try:
+                if isinstance(thing, ast.FunctionDef) and 'jinja_filter' in [ x.func.id for x in thing.decorator_list ]:
+                    func_name = thing.name
+                    added_filters[func_name] = ast.get_docstring(thing)
+                    # add filter to jinja
+                    app.jinja_env.filters[func_name] = code_namespace[func_name]
+            except AttributeError as ae:
+                print(f"Error inspecting {thing} in {jfilter}")
+                app.logger.debug(f"Error inspecting {thing} in {jfilter}")
+
+    #import ipdb; ipdb.set_trace()
+    # These are the added filters.  must add these name + doc strings to the html
+    # Also do this for built-in jinja filters
+    for f in sorted(added_filters):
+        app.logger.warning("%s: %s" % (f, added_filters[f]))
+        doc_string = str(added_filters.get(f, 'No Description'))
+        doc_string = doc_string.split('\n')[0]
+        print("%s: %s" % (f, doc_string))
 
 
 if __name__ == "__main__":
     app.debug = True
-    app.run(host= '0.0.0.0')
+    add_jinja_filters(jinja_filter_path)
+    app.run(host='0.0.0.0')
